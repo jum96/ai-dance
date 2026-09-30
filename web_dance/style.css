@@ -10,7 +10,9 @@
   --accent2: #4d7cff;
   --accent3: #39ffcf;
   --gold: #ffd54a;
-  --font-display: "Arial Black", "Impact", "Haettenschweiler", "Franklin Gothic Bold", "Segoe UI Black", sans-serif;
+  /* 拉丁字形走 Arial Black/Impact;中文没有这些字形,显式补中文黑体,避免落到默认宋体类字体 */
+  --font-display: "Arial Black", "Impact", "Haettenschweiler", "Franklin Gothic Bold", "Segoe UI Black",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -98,8 +100,10 @@ html, body {
   /* 电视/大屏摆摊要站远了看,字号跟着视口放大(写死 56px 在 1080p 上远看太小) */
   font-size: clamp(56px, 6.5vw, 132px);
   font-weight: 900;
-  font-style: italic;
-  letter-spacing: 2px;
+  /* 判定档位改成中文后(完美/很棒/不错/没中),斜体是浏览器合成的假斜体,中文上很难看 → 改正体 */
+  font-style: normal;
+  /* 只有两个字,拉开字距才有分量 */
+  letter-spacing: 10px;
   line-height: 1;
   color: var(--jtier, #fff);
   -webkit-text-stroke: 1px rgba(255,255,255,0.28);

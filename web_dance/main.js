@@ -206,8 +206,8 @@ const replayPlayer = new HighlightReplayController({
   video: replayVideo,
   onSegmentChange: (segment, index, total) => {
     replayCount.textContent = `${index + 1} / ${total}`;
-    replayTier.textContent = segment.fallback ? "精彩回放" : (segment.tier || "精彩动作");
-    replayCombo.textContent = segment.combo > 1 ? `${segment.combo} COMBO` : "";
+    replayTier.textContent = segment.fallback ? "精彩回放" : (TIER_LABEL[segment.tier] || segment.tier || "精彩动作");
+    replayCombo.textContent = segment.combo > 1 ? `${segment.combo} 连击` : "";
     replayCombo.hidden = segment.combo <= 1;
     replayOverlay.classList.remove("segment-pop");
     void replayOverlay.offsetWidth;
@@ -256,11 +256,13 @@ function avatarScreen() {
 
 // 判定层级配色:金 > 青 > 蓝 > 红,与结算评级 S/A/B/D 同族
 const TIER_COLORS = { PERFECT: "#ffd54a", GREAT: "#39ffcf", GOOD: "#4d7cff", MISS: "#ff5f6d" };
+// 显示用中文档位:内部 tier 键(引擎产出,保持英文不动)与界面文字解耦
+const TIER_LABEL = { PERFECT: "完美", GREAT: "很棒", GOOD: "不错", MISS: "没中" };
 
 function showJudge(tier, subText) {
   dom.judge.dataset.tier = tier;
   dom.judge.style.setProperty("--jtier", TIER_COLORS[tier] || "#ffffff");
-  dom.judgeTier.textContent = tier;
+  dom.judgeTier.textContent = TIER_LABEL[tier] || tier;
   dom.judgeSub.textContent = subText || "";
   dom.judge.classList.remove("hidden");
   dom.judge.classList.remove("pop");

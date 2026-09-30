@@ -28,14 +28,45 @@ export async function reloadSongIndex() {
   return index;
 }
 
+/**
+ * 显示名覆盖表。
+ * songs/index.json 里的 label 有一部分直接来自 FBX 文件名(如 "Hip Hop Dancing"、"Dance3 Mixamo"),
+ * 印在选曲卡和结算界面上很出戏。这里只覆盖【显示层】的 label,
+ * **不改 songs/index.json** —— 那份是工具(scoring/src/songIndex.js)生成的共享数据,改了会被下次导出覆盖。
+ * 要加名字,往下面两张表里加就行(id 对不上就自动回退用原始 label)。
+ */
+const DANCE_NAME_CN = {
+  hiphop: "街舞律动",
+  salsa: "萨尔萨舞",
+  "demo-arena-loop": "合成示例舞",
+  copydance1: "风萧萧雨萧萧",
+  "dance3-mixamo": "舞曲第三号",
+  "dance1-video": "舞蹈第一号",
+};
+
+const SONG_NAME_CN = {
+  "pop-demo": "流行示例曲",
+  "samba-demo": "桑巴示例曲",
+  "demo-beat": "示例节拍",
+  copydance1: "风萧萧雨萧萧",
+  "dance3-mixamo": "舞曲第三号 · 原声",
+  "dance1-video": "舞蹈第一号",
+};
+
+// 只替换 label 字段,其余字段原样透传;表里没有的 id 直接返回原对象
+function withName(row, table) {
+  return row && table[row.id] ? { ...row, label: table[row.id] } : row;
+}
+
 export function dances() {
-  return index?.dances ?? [];
+  return (index?.dances ?? []).map((d) => withName(d, DANCE_NAME_CN));
 }
 
 export function songs() {
-  return index?.songs ?? [];
+  return (index?.songs ?? []).map((s) => withName(s, SONG_NAME_CN));
 }
 
+// dances()/songs() 已经套过映射,这里直接按 id 取即可
 export function danceById(id) {
   return dances().find((d) => d.id === id) ?? null;
 }
