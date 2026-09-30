@@ -998,11 +998,29 @@ html, body {
   cursor: pointer;
   border: 2px solid rgba(255,255,255,0.16);
   box-shadow: 0 18px 46px rgba(0,0,0,0.6);
-  opacity: 0.62;
-  filter: saturate(0.75) brightness(0.88);
+  /* 原来 0.62/0.75/0.88 三层压暗,整排卡片看过去灰蒙蒙的。收回来一大截,
+     只留一点"未选中"的差异,选中态再靠描边和扫光拉开。 */
+  opacity: 0.8;
+  filter: saturate(0.92) brightness(0.97);
   transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.15), opacity 0.45s, filter 0.45s,
     border-color 0.3s, box-shadow 0.45s;
   will-change: transform, opacity;
+}
+/* 选中卡:一道旋转的光楔扫过卡面(街机感),配合外圈呼吸描边 */
+.song-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  background: conic-gradient(from 0deg,
+    transparent 0deg, rgba(255,255,255,0.30) 22deg, transparent 58deg,
+    transparent 180deg, rgba(255,255,255,0.16) 200deg, transparent 238deg, transparent 360deg);
+}
+.song-card.selected::before { opacity: 1; animation: cardSweep 3.4s linear infinite; }
+@keyframes cardSweep {
+  to { transform: rotate(360deg) scale(1.7); }
 }
 .song-card.selected {
   opacity: 1;
@@ -1197,7 +1215,7 @@ html, body {
   height: clamp(216px, 22.4vw, 269px);
   transform: translate(-50%, -50%);
   transform-origin: center center;
-  opacity: 0.68;
+  opacity: 0.82;
   transition: transform 0.48s cubic-bezier(0.2,0.9,0.25,1.08), opacity 0.4s ease, filter 0.4s ease, border-color 0.3s, box-shadow 0.4s;
 }
 #song-pick-strip .song-card.selected { filter: saturate(1.06) brightness(1.04); }
@@ -1308,7 +1326,7 @@ html, body {
   .rays, .beam, #result-eq i, #result-again { animation: none; }
   #judge.pop #judge-tier, #judge.pop #judge-sub, #judge.pop::before,
   #combo-badge.pulse #combo-badge-n, #combo-badge.milestone #combo-badge-n, #combo-badge.hot { animation: none; }
-  #song-pick-title, .song-card.selected { animation: none; }
+  #song-pick-title, .song-card.selected, .song-card.selected::before { animation: none; }
 }
 
 @media (max-width: 720px) {
