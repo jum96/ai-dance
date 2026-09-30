@@ -20,11 +20,13 @@ export function createScene(canvas) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.9;
+  // 0.9 偏暗:ACES 色调映射 + 近黑背景 + 环境补光不足,大屏上整体发黑。提到 1.15。
+  renderer.toneMappingExposure = 1.15;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a1020);
-  scene.fog = new THREE.FogExp2(0x0a1020, 0.02);
+  // 背景原来接近纯黑(#0a1020),远处舞台糊成一团黑。提亮为深藏青,保留霓虹对比但不发黑。
+  scene.background = new THREE.Color(0x16203a);
+  scene.fog = new THREE.FogExp2(0x16203a, 0.02);
 
   const camera = new THREE.PerspectiveCamera(
     50, window.innerWidth / window.innerHeight, 0.1, 120
@@ -60,7 +62,8 @@ export function createScene(canvas) {
   }
 
   // ---- 灯光 ----
-  scene.add(new THREE.HemisphereLight(0xc7d8ff, 0x252035, 0.75));
+  // 半球光是唯一的环境补光,0.75 太低会让角色背光面糊成黑色,提到 1.05。
+  scene.add(new THREE.HemisphereLight(0xc7d8ff, 0x252035, 1.05));
 
   const key = new THREE.DirectionalLight(0xfff5e8, 1.7);
   key.position.set(2, 5, 4);
