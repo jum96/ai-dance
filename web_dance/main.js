@@ -74,6 +74,9 @@ const dom = {
   judge: $("judge"),
   judgeTier: $("judge-tier"),
   judgeSub: $("judge-sub"),
+  judgeMeter: $("judge-meter"),
+  judgeDetail: $("judge-detail"),
+  jmDot: $("jm-dot"),
   comboBadge: $("combo-badge"),
   comboBadgeN: $("combo-badge-n"),
   status: $("status"),
@@ -281,12 +284,35 @@ function missReason(res) {
   return (res.acc ?? 0) < 0.55 ? "动作没到位" : "幅度不够";
 }
 
+// 偏差尺的满刻度 = 引擎的实际采样窗。上游在 ScoringAdapter 里把每个音符的 window
+// 统一覆盖成 ±JUDGE_WINDOW(0.3s),这里跟着它走。**仅用于显示,不参与判定。**
+const JUDGE_WINDOW_SEC = 0.3;
+
+// 把这一次判定的"差了多少毫秒 / 动作还原多少"画到尺子上。
+// deltaSec 的正负由 eventScorer 定义:正 = 晚了,负 = 早了,null = 整条采样窗都没采到合格帧。
+function renderJudgeMeter(res) {
+  const acc = Math.round((res.acc ?? 0) * 100);
+  const dt = res.deltaSec;
+  if (dt == null) {
+    // 没有有效采样点,偏差无意义 → 藏起尺子,只报动作还原度
+    dom.judgeMeter.classList.add("hidden");
+    dom.judgeDetail.textContent = `动作还原 ${acc}%`;
+    return;
+  }
+  dom.judgeMeter.classList.remove("hidden");
+  const ms = Math.round(dt * 1000);
+  const off = Math.max(-1, Math.min(1, dt / JUDGE_WINDOW_SEC)); // -1 最早 → +1 最晚
+  dom.jmDot.style.left = (50 + off * 50).toFixed(2) + "%";
+  dom.judgeDetail.textContent = `${ms >= 0 ? "晚" : "早"} ${Math.abs(ms)}ms · 动作还原 ${acc}%`;
+}
+
 function judgeFeedback(res) {
   const { tier, combo, score } = res;
   const p = avatarScreen();
   const gain = score > 0 ? "+" + Math.round(score) : "";
   // GOOD/MISS 时把"为什么"顶到飘字位置 —— 这会儿玩家需要的是纠正,不是分数
   const sub = tier === "GOOD" || tier === "MISS" ? missReason(res) : gain;
+  renderJudgeMeter(res);
   if (tier !== lastTier) {
     lastTier = tier;
     flashCamFrame(tier);

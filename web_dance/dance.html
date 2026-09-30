@@ -103,10 +103,17 @@
       </div>
     </div>
 
-    <!-- 判定反馈(完美 / 很棒 / 不错 / 没中 + 得分飘字) -->
+    <!-- 判定反馈(完美 / 很棒 / 不错 / 没中 + 得分飘字 + 节拍偏差尺) -->
     <div id="judge" class="hidden">
       <div id="judge-tier">完美</div>
       <div id="judge-sub"></div>
+      <!-- 节拍偏差尺:左=早了,右=晚了,圆点按偏差毫秒落位;超出判定窗就贴边 -->
+      <div id="judge-meter">
+        <span class="jm-end">早</span>
+        <i class="jm-bar"><i id="jm-dot"></i></i>
+        <span class="jm-end">晚</span>
+      </div>
+      <div id="judge-detail"></div>
     </div>
     <!-- 连击徽章(顶部,命中脉动 / 每 10 连爆发) -->
     <div id="combo-badge" class="hidden">
