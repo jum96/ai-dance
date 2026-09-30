@@ -913,10 +913,12 @@ function updatePoseLane() {
     hasSource: !!src,
   });
   const seq = src?.seq ?? null;
+  // 学舞模式喂进来的是"重定时刻到 0"的子序列,而逐点白影按整曲绝对时刻存 → 查图时加回段首
+  const assetOffsetSec = src?.assetOffsetSec ?? 0;
   laneView.update(plan, {
     seq,
     dpr: globalThis.devicePixelRatio || 1,
-    entryFor: seq ? (ev) => laneAssetFor(laneManifest, seq.danceId, ev.t) : null,
+    entryFor: seq ? (ev) => laneAssetFor(laneManifest, seq.danceId, ev.t + assetOffsetSec) : null,
   });
 }
 
@@ -1753,7 +1755,7 @@ async function enterLearn() {
   state.select.player = null;
   state.learn = {
     entry, sections: splitSections(entry.seq), section: null, part: null, rate: 1,
-    scorer: null, session: null, timer: null, running: false,
+    scorer: null, session: null, timer: null, running: false, sub: null, assetOffsetSec: 0,
     rep: 0, repStartScore: 0, best: 0, repParts: [], lastFrame: null, partAvg: null, worstId: null,
     resting: false, lastHudAt: 0,
   };
@@ -1764,8 +1766,21 @@ async function enterLearn() {
   const coach = await ensureCoach();
   if (coach) { coach.object.visible = true; coach.retargeter.reset(); }
   layoutForMode();
-  if (!state.stream) await startCamera();
+  await startCameraQuietly();
   setStatus("学舞模式:选一组开始练");
+}
+
+/**
+ * 学舞模式下摄像头起不来不该算「启动失败」:面板、教练、音乐都照常可用,
+ * 只是没有判定。跟跳模式没这么宽容是有意的(没判定就没分数,等于白跳)。
+ */
+async function startCameraQuietly() {
+  if (state.stream) return;
+  try {
+    await startCamera();
+  } catch (e) {
+    setStatus(`摄像头打不开(${e.message}):只能看教练跳,判定不可用`);
+  }
 }
 
 /** 开始(或重开)当前这一组的循环练习 */
@@ -1786,6 +1801,9 @@ async function startLearnPractice({ sectionIndex, part, rate }) {
   learn.part = part;
   learn.rate = rate;
   learn.scorer = scorer;
+  // 判定轨道(动作提示)要读子序列;段首秒数用来把重定后的时刻还原成整曲时刻去查白影
+  learn.sub = sub;
+  learn.assetOffsetSec = section.startSec;
   learn.baseWeights = defWeightsFor(scorer.defs);
   learn.eventsById = new Map(scorer.events.map((e) => [e.moveId, e]));
   learn.rep = 0;
@@ -1810,7 +1828,7 @@ async function startLearnPractice({ sectionIndex, part, rate }) {
     state.coachPlayer = makeCoachPlayer(sub, coach.retargeter, resolveMode(state.danceType).bones);
   }
   layoutForMode();
-  if (!state.stream) await startCamera();
+  await startCameraQuietly();
   if (generation !== startGeneration) return;
 
   const session = createLearnSession(sub, generation);

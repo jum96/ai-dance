@@ -61,9 +61,23 @@ export const ARROW_AWAY_MIN_LEN = 1;   // 关节离髋中心的距离小于此�
 // 门控:什么时候这张卡该出现
 // ---------------------------------------------------------------------------
 
-// 当前在跳哪支舞、跳到第几秒。判定轨道只在「正式挑战进行中」显示:
-// 选曲首页/试跳/倒计时/表演模式都不显示。
+/**
+ * 当前该由谁给判定轨道供数据(右下角那条"下一个动作"的剪影流)。
+ * 只在「练习进行中」显示:选曲首页/试跳/倒计时/表演模式都不显示。
+ *
+ * - 跟跳模式(challenge/pk):读整曲,时刻就是歌曲时钟。
+ * - 学舞模式:读当前这一段的子序列。**但子序列的音符时刻被重定到了 0**
+ *   (见 learn/sections.js 的 subSequence),而逐点白影是按整曲绝对时刻存的,
+ *   所以要多带一个 assetOffsetSec = 段首秒数,查白影时加回去,否则会查到错的剪影。
+ */
 export function activePoseSource(state) {
+  if (state?.learn?.running && state.learn.sub) {
+    return {
+      seq: state.learn.sub,
+      t: state.learn.session?.songTime ?? 0,
+      assetOffsetSec: state.learn.assetOffsetSec ?? 0,
+    };
+  }
   if ((state?.mode === "challenge" || state?.mode === "pk") && state?.challenge?.running) {
     const ch = state.challenge;
     if (ch?.seq) return { seq: ch.seq, t: ch.session?.songTime ?? 0 };

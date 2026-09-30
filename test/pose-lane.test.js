@@ -111,6 +111,29 @@ test("门控: 只有 challenge/pk 且 running 才给出判定数据源", () => {
   assert.equal(activePoseSource(undefined), null);
 });
 
+test("门控: 学舞模式也给出判定数据源,并带上段首秒数供查白影", () => {
+  const learn = { learn: { running: true, sub: "SUB", session: { songTime: 2.5 }, assetOffsetSec: 8 } };
+  assert.deepEqual(activePoseSource({ mode: "pk", ...learn }), {
+    seq: "SUB", t: 2.5, assetOffsetSec: 8,
+  }, "学舞的子序列音符时刻被重定到 0,必须带 assetOffsetSec 才能查到整曲时刻的白影");
+  assert.equal(activePoseSource({ learn: { running: false, sub: "SUB" } }), null, "停下来就不显示");
+  assert.equal(activePoseSource({ learn: { running: true } }), null, "还没切出段就不显示");
+  // 学舞进行中时优先读学舞,别被同时存在的 challenge 抢走
+  assert.deepEqual(
+    activePoseSource({
+      mode: "pk",
+      challenge: { running: true, seq: "FULL", session: { songTime: 99 } },
+      ...learn,
+    }),
+    { seq: "SUB", t: 2.5, assetOffsetSec: 8 },
+  );
+  // assetOffsetSec 缺省算 0(手写 state 或老数据都不炸)
+  assert.deepEqual(
+    activePoseSource({ learn: { running: true, sub: "SUB" } }),
+    { seq: "SUB", t: 0, assetOffsetSec: 0 },
+  );
+});
+
 test("门控: 四个开关(?nohint / 视频模式 / 没有轨道 DOM / 没有数据源)任一关闭都隐藏并清空", () => {
   const base = { events: [ev(1)], t: 0, hasSource: true, hasTrack: true };
   for (const patch of [{ disabled: true }, { videoSide: true }, { hasTrack: false }, { hasSource: false }]) {

@@ -171,6 +171,8 @@ export function createLearnPanel({ onPractice, onStop, onMerge, onExit }) {
 
   function setRunning(next) {
     running = !!next;
+    // 练的时候收起选择器,只留 HUD —— 横条变窄一条,不碰摄像头窗
+    root.classList.toggle("ln-compact", running);
     el.start.disabled = running || !sections.length;
     el.stop.disabled = !running;
     el.merge.disabled = running;

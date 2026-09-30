@@ -1,4 +1,10 @@
-/* learn.css — 学舞模式(模块 B)的样式:面板 #learn-root + 选曲抽屉里的入口按钮。 */
+/* learn.css — 学舞模式(模块 B)的样式:面板 #learn-root + 选曲抽屉里的入口按钮。
+ *
+ * 布局为什么是「顶部横条」而不是「左上竖栏」:
+ * pk 模式下 #cam-panel 是 left:2.5vw + 垂直居中,而且标题栏还向上溢出 34px
+ * (实测 892x789 视口下占 x 20→302 / y 178→389),左上那一竖条根本没有空间放面板。
+ * 横条放顶部既避开摄像头窗,也避开被推到画面右侧的舞者。
+ */
 
 /* 选曲抽屉底部的「学舞模式」:跟在金色「开始挑战」下面的次级按钮 */
 #song-pick-learn {
@@ -21,11 +27,9 @@
 
 #learn-root {
   position: fixed;
-  left: 16px;
-  top: 64px;
-  width: min(30vw, 420px);
-  max-height: 34vh;
-  overflow-y: auto;
+  left: 8px;
+  right: 8px;
+  top: 8px;
   z-index: 40;
   font-size: 13px;
 }
@@ -33,59 +37,69 @@
 #learn-root.hidden { display: none; }
 
 .ln-panel {
-  padding: 12px 12px 10px;
-  border-radius: 14px;
-  background: var(--panel, rgba(13, 20, 40, 0.72));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--panel, rgba(13, 20, 40, 0.78));
   border: 1px solid var(--panel-border, rgba(120, 160, 255, 0.25));
   backdrop-filter: blur(10px);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
 }
+
+/* ---- 第一组:标题 + 三个选择器 + 按钮 ---- */
 
 .ln-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  padding-right: 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .ln-title {
   font-family: var(--font-display, sans-serif);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 900;
   letter-spacing: 1px;
   color: var(--accent3, #39ffcf);
+  white-space: nowrap;
 }
 
 .ln-song {
-  margin-top: 2px;
   color: var(--muted, #93a2c8);
   font-size: 12px;
-  word-break: break-all;
+  white-space: nowrap;
 }
 
 .ln-x {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   line-height: 1;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--muted, #93a2c8);
   background: transparent;
   border: 1px solid var(--panel-border, rgba(120, 160, 255, 0.25));
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
 }
 
 .ln-x:hover { color: var(--text, #e8edff); border-color: var(--accent, #ff3d81); }
 
-.ln-step { margin-bottom: 9px; }
+.ln-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 .ln-label {
-  margin-bottom: 5px;
   color: var(--muted, #93a2c8);
   font-size: 11px;
   letter-spacing: 1px;
+  white-space: nowrap;
 }
 
 .ln-chips {
@@ -95,13 +109,14 @@
 }
 
 .ln-chip {
-  padding: 5px 9px;
+  padding: 4px 9px;
   border-radius: 9px;
   font-size: 12px;
   color: var(--text, #e8edff);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   cursor: pointer;
+  white-space: nowrap;
   transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
@@ -115,11 +130,7 @@
 
 .ln-chip:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-.ln-chip small {
-  margin-left: 4px;
-  color: var(--muted, #93a2c8);
-  font-size: 10px;
-}
+.ln-chip small { margin-left: 4px; color: var(--muted, #93a2c8); font-size: 10px; }
 
 /* 部位色:手=金 腿=青 躯干=蓝,和判定档位配色同族 */
 .ln-chip[data-part="arms"].on { border-color: var(--gold, #ffd54a); box-shadow: 0 0 12px rgba(255, 213, 74, 0.35); }
@@ -128,54 +139,61 @@
 
 .ln-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
-  margin: 10px 0 0;
+  margin-left: auto;
 }
 
 .ln-actions button {
-  flex: 1 1 auto;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 6px 12px;
+  border-radius: 9px;
   font-size: 13px;
   font-weight: 700;
   color: var(--text, #e8edff);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.14);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .ln-actions button:hover:not(:disabled) { border-color: var(--accent2, #4d7cff); }
-
 .ln-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .ln-actions .ln-primary {
-  flex-basis: 100%;
   color: #0a1020;
   background: linear-gradient(135deg, var(--accent3, #39ffcf), var(--accent2, #4d7cff));
   border-color: transparent;
 }
 
-.ln-live { margin-top: 11px; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 9px; }
+/* ---- 第二组:练习中的实时 HUD ---- */
+
+.ln-live {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .ln-live.hidden { display: none; }
 
 .ln-hud {
   display: flex;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 12px;
   font-size: 12px;
   color: var(--muted, #93a2c8);
+  white-space: nowrap;
 }
 
 .ln-hud b { color: var(--gold, #ffd54a); font-size: 14px; }
 
-.ln-bars { margin-top: 8px; display: grid; gap: 5px; }
+.ln-bars { display: flex; gap: 12px; }
 
 .ln-bar {
   display: grid;
-  grid-template-columns: 34px 1fr 38px;
+  grid-template-columns: 28px 58px 34px;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 11px;
   color: var(--muted, #93a2c8);
 }
@@ -202,22 +220,22 @@
 
 .ln-bar.weak { color: var(--text, #e8edff); }
 
-.ln-fix {
-  margin-top: 8px;
-  min-height: 16px;
-  font-size: 12px;
-  color: var(--text, #e8edff);
-}
-
+.ln-fix { font-size: 12px; color: var(--text, #e8edff); }
 .ln-fix b { color: var(--accent, #ff3d81); }
 
-.ln-status {
-  margin-top: 8px;
-  min-height: 15px;
-  font-size: 11px;
-  color: var(--muted, #93a2c8);
-}
+.ln-status { font-size: 11px; color: var(--muted, #93a2c8); width: 100%; }
 
-@media (max-width: 900px) {
-  #learn-root { width: min(46vw, 380px); max-height: 40vh; }
+/* ---- 练习中收起选择器:只留 HUD,横条变窄一条,彻底不碰摄像头窗 ---- */
+
+#learn-root.ln-compact .ln-step,
+#learn-root.ln-compact #ln-song,
+#learn-root.ln-compact #ln-start,
+#learn-root.ln-compact #ln-merge,
+#learn-root.ln-compact .ln-status { display: none; }
+
+#learn-root.ln-compact .ln-head { border-right: 0; padding-right: 0; }
+
+@media (max-width: 720px) {
+  .ln-actions { margin-left: 0; }
+  .ln-live { padding-left: 0; border-left: 0; }
 }
