@@ -371,7 +371,10 @@ html, body {
   left: 2.5vw;
   top: 50%;
   bottom: auto;
-  width: min(39vw, 72vh);
+  /* 原来是 min(39vw, 72vh):1920x1080 的大屏上会变成 748x561 的巨窗,
+     一个人占掉屏幕左侧 39%,严重挡视野。收到 30vw/55vh(1080p 下约 576x432)。
+     另外窗口现在可以拖动+缩放(main.js setupCamPanel),现场可随手调。 */
+  width: min(30vw, 55vh);
   transform: translateY(-50%);
   padding: 0;
   border: 0;
