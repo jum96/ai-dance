@@ -98,7 +98,9 @@ export class ScoringAdapter {
   }
   _ingest(t, frame) {
     // 与旧 NoteJudge 判定时刻对齐:采样窗中心 = note.t + 延迟补偿,镜像为玩家帧时间减补偿。
-    const adj = t - this.latency.totalOffsetSec;
+    // 用 songOffsetSec 而非 totalOffsetSec:延迟量是**真实秒**,倍速(学舞 0.5x)下歌曲时间走得更慢,
+    // 同样的真实延迟只对应一半的歌曲时间,不缩放会整体偏早。rate=1 时两者相等,跟跳模式行为不变。
+    const adj = t - this.latency.songOffsetSec;
     if (adj < this.lastFrameT) return;
     this.lastFrameT = adj;
     const f = this._sanitize(frame, adj);

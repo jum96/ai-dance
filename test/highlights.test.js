@@ -54,7 +54,7 @@ test('music recording branches receive new sources and disconnect without muting
     createMediaStreamDestination: () => ({ stream: { getTracks: () => [track] } }),
     decodeAudioData: async () => ({ duration: 5 }),
     createBufferSource: () => {
-      const source = { connections: [], connect(node) { this.connections.push(node); },
+      const source = { connections: [], playbackRate: { value: 1 }, connect(node) { this.connections.push(node); },
         disconnect(node) { this.connections = this.connections.filter(x => x !== node); }, start() {}, stop() {} };
       sources.push(source); return source;
     },

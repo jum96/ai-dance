@@ -38,6 +38,11 @@ import {
 import { createLaneView } from "./lane-view.js";
 import { buildLaneFigure } from "./lane-figure.js";
 import { laneAssetFor, laneAssetUrl, loadLaneManifest } from "./lane-assets.js";
+// 学舞模式(B):面板只做 UI,拆段逻辑是纯函数,跑段的主循环在下面
+import { createLearnPanel } from "./learn/learn.js";
+import {
+  defWeightsFor, maskEventWeights, poseScoreByPart, splitSections, subSequence,
+} from "./learn/sections.js";
 
 // ---------------------------------------------------------------------------
 // 状态
@@ -55,6 +60,8 @@ const state = {
   modelSource: null,       // { url, type } 用于给教练加载同一模型
   stream: null,
   challenge: null,         // { seq, scorer, running, session, noteBonus }
+  // 学舞模式(B):同一时刻只跑一组,循环重复。seq 是整曲,sub 才是当前这一段。
+  learn: null,             // { entry, sections, section, part, rate, scorer, session, ... }
   // 默认先展示真实 FBX 编排，参数化 demo 仅作为技术回退。
   challengeDanceId: "hiphop",
   challengeSongId: "pop-demo",
@@ -132,6 +139,7 @@ const dom = {
   songPickNext: $("song-pick-next"),
   songPickCurrent: $("song-pick-current"),
   songPickStart: $("song-pick-start"),
+  songPickLearn: $("song-pick-learn"),
   poseHint: $("pose-hint"),
   judgeStage: $("judge-stage"),
   judgeTrack: $("judge-track"),
@@ -421,6 +429,10 @@ function renderLoop() {
     if ((state.mode === "challenge" || state.mode === "pk") && state.challenge?.running && state.coachPlayer) {
       const t = state.challenge.session?.songTime ?? 0;
       state.coachPlayer.update(t);
+    }
+    // 学舞模式:教练只跳当前这一组,跳完从头再来
+    if (state.learn?.running && state.coachPlayer) {
+      state.coachPlayer.update(state.learn.session?.songTime ?? 0);
     }
     // 右下判定轨道:剪影从右往左流入判定平台,抵达平台即消失
     updatePoseLane();
@@ -1604,6 +1616,14 @@ function onFrame(frame, boneDefs) {
     const res = ch.scorer.judge(t, frame);
     if (res) ch.previewAcc = res.acc;
   }
+
+  // 学舞判定:只判这一段、只判选中的部位(权重已在 startLearnPractice 里掩掉)
+  const learn = state.learn;
+  if (learn?.running && learn.session) {
+    learn.lastFrame = frame;
+    const t = learn.session.songTime - Math.max(0, performance.now() - frame.capturedAtMs) / 1000;
+    learn.scorer.judge(t, frame);
+  }
 }
 
 function stopAll({ keepCamera = false } = {}) {
@@ -1622,6 +1642,13 @@ function stopAll({ keepCamera = false } = {}) {
   if (state.challenge) {
     state.challenge.running = false;
     state.challenge.session?.stop();
+  }
+  // 学舞模式:停循环与当前这一段的会话(面板交给 exitLearn 自己收)
+  if (state.learn) {
+    clearInterval(state.learn.timer);
+    state.learn.timer = null;
+    state.learn.running = false;
+    state.learn.session?.stop();
   }
   state.coachPlayer = null;
   if (state.coach) state.coach.retargeter.reset();
@@ -1672,8 +1699,8 @@ dom.btnHome.addEventListener("click", (e) => {
 // 倒计时
 // ---------------------------------------------------------------------------
 // Audio-clock countdown, cancellable without sleeping through an obsolete start.
-async function countdownTo(goAt, generation) {
-  const ctx = state.challenge.session.engine.ctx;
+async function countdownTo(goAt, generation, audioCtx = null) {
+  const ctx = audioCtx || state.challenge.session.engine.ctx;
   dom.centerMsg.classList.remove("hidden");
   return new Promise((resolve) => {
     const tick = () => {
@@ -1686,6 +1713,249 @@ async function countdownTo(goAt, generation) {
     tick();
   });
 }
+
+// ---------------------------------------------------------------------------
+// 学舞模式(B):选曲 → 选组 → 选部位 → 单段循环练 → 单段评分+纠正 → 合并
+//
+// 与跟跳模式的区别只有两点:
+//   1) 喂给判定引擎的不是整曲,而是 subSequence() 切出来的这一段(音乐也是从段首起播);
+//   2) 事件权重被 maskEventWeights() 掩成"只判选中的部位"(引擎按剩余权重自动归一化,
+//      判定引擎本身一行都不用改)。
+// 跳完一段 → 结算本遍 → 歇一拍 → 从头再来,直到用户停手或"串起来"。
+// ---------------------------------------------------------------------------
+const LEARN_REST_MS = 1600;
+let learnPanel = null;
+
+function ensureLearnPanel() {
+  if (learnPanel) return learnPanel;
+  try {
+    learnPanel = createLearnPanel({
+      onPractice: (spec) => { startLearnPractice(spec).catch((e) => setStatus("学舞启动失败: " + e.message)); },
+      onStop: () => { stopLearn(); setStatus("已暂停,可以换一组或改速度"); },
+      onMerge: () => mergeLearn(),
+      onExit: () => exitLearn(),
+    });
+  } catch (e) {
+    console.warn("[learn] 面板挂载失败:", e);
+  }
+  return learnPanel;
+}
+
+/** 进入学舞模式:用选曲页当前选中的那支舞切段 */
+async function enterLearn() {
+  const entry = state.select.entries[state.select.selected];
+  if (!entry) { setStatus("先选一支舞"); return; }
+  const panel = ensureLearnPanel();
+  if (!panel) { setStatus("学舞面板挂载失败"); return; }
+  stopPreviewMusic();
+  clearTimeout(state.select.revertTimer);
+  clearInterval(cardAnimTimer);
+  state.select.player = null;
+  state.learn = {
+    entry, sections: splitSections(entry.seq), section: null, part: null, rate: 1,
+    scorer: null, session: null, timer: null, running: false,
+    rep: 0, repStartScore: 0, best: 0, repParts: [], lastFrame: null, partAvg: null, worstId: null,
+    resting: false, lastHudAt: 0,
+  };
+  dom.songPick.classList.add("hidden");
+  setSongPickerOpen(false);
+  laneView.reset();
+  panel.open({ label: entry.dance.label, list: state.learn.sections });
+  const coach = await ensureCoach();
+  if (coach) { coach.object.visible = true; coach.retargeter.reset(); }
+  layoutForMode();
+  if (!state.stream) await startCamera();
+  setStatus("学舞模式:选一组开始练");
+}
+
+/** 开始(或重开)当前这一组的循环练习 */
+async function startLearnPractice({ sectionIndex, part, rate }) {
+  const learn = state.learn;
+  if (!learn) return;
+  const section = learn.sections[sectionIndex];
+  if (!section) return;
+  const sub = subSequence(learn.entry.seq, section.startSec, section.endSec);
+  if (!sub) { learnPanel?.setStatus("这一段切不出可练的内容,换一组试试"); return; }
+
+  stopLearn();
+  const generation = ++startGeneration;
+  const scorer = new ScoringAdapter(sub);
+  // 只判选中的部位:按剩余权重重新归一化是 framePoseScore 自带的,引擎不用改
+  for (const event of scorer.events) event.weights = maskEventWeights(event.weights, part);
+  learn.section = section;
+  learn.part = part;
+  learn.rate = rate;
+  learn.scorer = scorer;
+  learn.baseWeights = defWeightsFor(scorer.defs);
+  learn.eventsById = new Map(scorer.events.map((e) => [e.moveId, e]));
+  learn.rep = 0;
+  learn.repStartScore = 0;
+  learn.best = 0;
+  learn.repParts = [];
+  learn.partAvg = null;
+  learn.worstId = null;
+  learn.lastFrame = null;
+  learn.resting = false;
+  learn.lastHudAt = 0;
+  learn.running = false;
+  learn.session = null;
+  learnPanel?.setRunning(true);
+  learnPanel?.setStatus("准备中…");
+
+  const coach = await ensureCoach();
+  if (generation !== startGeneration) return;
+  if (coach) {
+    coach.object.visible = true;
+    coach.retargeter.reset();
+    state.coachPlayer = makeCoachPlayer(sub, coach.retargeter, resolveMode(state.danceType).bones);
+  }
+  layoutForMode();
+  if (!state.stream) await startCamera();
+  if (generation !== startGeneration) return;
+
+  const session = createLearnSession(sub, generation);
+  await session.prepare();
+  if (generation !== startGeneration) return;
+  // 倍速:引擎时钟与会话延迟补偿一起改,漏一个判定就整体偏移
+  session.setRate(rate);
+  scorer.latency.rate = rate;
+
+  const ctx = session.engine.ctx;
+  if (ctx.state === "suspended") { try { await ctx.resume(); } catch { /* noop */ } }
+  const goAt = ctx.currentTime + 3.2;
+  await session.start(goAt);
+  scorer.latency.outputLatencySec = ctx.outputLatency || 0;
+  if (!await countdownTo(goAt, generation, ctx)) return;
+
+  learn.session = session;
+  learn.running = true;
+  resetScoreHUD();
+  lastTier = "";
+  learnPanel?.setStatus(
+    `第${sectionIndex + 1}组 · 只判${partLabelOf(part)} · ${rate}x —— 跳完自动再来一遍`,
+  );
+  learn.timer = setInterval(() => learnTick(generation), 25);
+}
+
+const partLabelOf = (partId) => ({ arms: "手部", legs: "腿部", torso: "躯干" }[partId] ?? partId);
+
+function createLearnSession(sequence, generation) {
+  const AudioCtor = globalThis.AudioContext || globalThis.webkitAudioContext;
+  const audioContext = AudioCtor ? new AudioCtor() : null;
+  return new SongSession({
+    sequence,
+    similarity: (ref, player) => state.learn.scorer._similarity(ref, player),
+    audioContext,
+    enableJudge: false, // 判定只走 ScoringAdapter 这一条流
+    allowSilent: false,
+    onSongEnd: () => onLearnRepEnd(generation),
+  });
+}
+
+function learnTick(generation) {
+  const learn = state.learn;
+  if (!learn?.running || generation !== startGeneration) return;
+  const t = learn.session.songTime;
+  const lag = Math.min(.25, (lastPerf?.stages?.captureToResult?.p95Ms ?? 80) / 1000);
+  for (const result of learn.scorer.advance(Math.max(0, t - lag))) {
+    if (result.ongoing) continue;
+    lastTier = "";
+    judgeFeedback(result);
+    learnNote(result);
+  }
+  // 面板每 25ms 刷一次太重(要重建三根条),250ms 一档够用
+  const now = performance.now();
+  if (!learn.resting && now - (learn.lastHudAt ?? 0) >= 250) {
+    learn.lastHudAt = now;
+    learnPanel?.setLive({
+      rep: learn.rep + 1, repScore: learn.scorer.score - learn.repStartScore,
+      best: learn.best, parts: learn.partAvg, worstId: learn.worstId,
+    });
+  }
+  learn.session.update();
+}
+
+/** 一条音符判完:算手/腿/躯干各自像不像,累积出本遍的薄弱部位 */
+function learnNote(result) {
+  const learn = state.learn;
+  const event = learn.eventsById.get(result.noteId);
+  if (!event || !learn.lastFrame) return;
+  const parts = poseScoreByPart({ bones: event.targetBones }, learn.lastFrame, learn.baseWeights);
+  learn.repParts.push(parts);
+  const avg = parts.map((p) => {
+    const seen = learn.repParts.map((all) => all.find((x) => x.id === p.id)?.score).filter((s) => s != null);
+    return { id: p.id, label: p.label, score: seen.length ? seen.reduce((a, b) => a + b, 0) / seen.length : null };
+  });
+  learn.partAvg = avg;
+  const worst = avg.filter((p) => p.score != null).sort((a, b) => a.score - b.score)[0];
+  learn.worstId = worst?.id ?? null;
+}
+
+/** 一遍跳完:结算本遍 → 歇一拍 → 从头再来 */
+async function onLearnRepEnd(generation) {
+  const learn = state.learn;
+  if (!learn?.running || generation !== startGeneration) return;
+  learn.rep += 1;
+  const repScore = Math.round(learn.scorer.score - learn.repStartScore);
+  const record = repScore > learn.best;
+  learn.best = Math.max(learn.best, repScore);
+  learn.resting = true;
+  learnPanel?.setLive({
+    rep: learn.rep, repScore, best: learn.best, parts: learn.partAvg, worstId: learn.worstId,
+  });
+  learnPanel?.setStatus(
+    `第 ${learn.rep} 遍跳完 · ${repScore} 分${record && learn.rep > 1 ? " · 就是这一遍" : ""} —— 歇一下接着来`,
+  );
+  await new Promise((r) => setTimeout(r, LEARN_REST_MS));
+  if (generation !== startGeneration || !state.learn?.running) return;
+  const again = state.learn;
+  again.resting = false;
+  again.repStartScore = again.scorer.score;
+  again.repParts = [];
+  again.partAvg = null;
+  again.worstId = null;
+  again.scorer.reset();
+  const ctx = again.session.engine.ctx;
+  if (ctx.state === "suspended") { try { await ctx.resume(); } catch { /* noop */ } }
+  await again.session.start(ctx.currentTime + 0.08);
+}
+
+/** 停手但留在学舞面板(可以换组/换部位/换速度再来) */
+function stopLearn() {
+  const learn = state.learn;
+  if (!learn) return;
+  clearInterval(learn.timer);
+  learn.timer = null;
+  learn.running = false;
+  learn.session?.stop();
+  learn.session = null;
+  state.coachPlayer = null;
+  if (state.coach) state.coach.retargeter.reset();
+  learnPanel?.setRunning(false);
+}
+
+/** 合并:退出单段练习,整曲跑一遍(就是普通跟跳) */
+function mergeLearn() {
+  const learn = state.learn;
+  if (!learn) return;
+  const index = state.select.entries.indexOf(learn.entry);
+  const fallback = state.select.selected;
+  stopLearn();
+  state.learn = null;
+  learnPanel?.close();
+  startSong(index >= 0 ? index : fallback);
+}
+
+function exitLearn() {
+  stopLearn();
+  state.learn = null;
+  learnPanel?.close();
+  enterSelect().catch((e) => setStatus("返回选曲失败: " + e.message));
+}
+
+dom.songPickLearn?.addEventListener("click", () => {
+  enterLearn().catch((e) => setStatus("学舞模式启动失败: " + e.message));
+});
 
 // ---------------------------------------------------------------------------
 // HUD 更新

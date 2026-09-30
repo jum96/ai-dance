@@ -36,6 +36,14 @@ test("LatencyModel: 三延迟求和 + judgeTimeAt", () => {
   assertClose(m.judgeTimeAt(1.0), 1.07);
 });
 
+test("LatencyModel: 倍速下延迟补偿按 rate 缩放(0.5x 练舞判定不整体偏移)", () => {
+  const m = new LatencyModel({ outputLatencySec: 0.01, inputLatencySec: 0.08, userOffsetSec: -0.02 });
+  assertClose(m.songOffsetSec, 0.07, 1e-9);
+  m.rate = 0.5;
+  assertClose(m.songOffsetSec, 0.035, 1e-9);
+  assertClose(m.judgeTimeAt(1.0), 1.035, 1e-9);
+});
+
 test("LatencyModel: autoCalibrate 用残差均值估计 inputLatencySec", () => {
   const m = new LatencyModel();
   const est = m.autoCalibrate([
@@ -216,6 +224,7 @@ function fakeAudioContext(clock = { t: 0 }) {
       const src = {
         buffer: null,
         connect() {},
+        playbackRate: { value: 1 }, // 真实 API 一定有;缺了 setRate 会炸
         start(when, offset) { started.push({ src, when, offset }); },
         stop() {},
         onended: null,
@@ -249,6 +258,33 @@ test("AudioEngine: load 解码 + play 调度 source.start", async () => {
   assert.equal(started.length, 1);
   assert.equal(started[0].when, 0);
   assert.equal(started[0].offset, 0);
+});
+
+test("AudioEngine: 倍速 —— songTime 按 rate 走快 + 音源 playbackRate 同步 + 切换不跳时间", async () => {
+  const clock = { t: 0 };
+  const { ctx, started } = fakeAudioContext(clock);
+  const e = new AudioEngine({ audioContext: ctx });
+  await e.load(new ArrayBuffer(8));
+  await e.play(0);
+
+  // 1x:真实 1 秒 = 歌曲 1 秒
+  clock.t = 1;
+  assertClose(e.songTime, 1.0);
+
+  // 切到 0.5x:应当就地重起音源(不跳时间),新音源与时钟都按 0.5 走
+  e.setRate(0.5);
+  assert.equal(started.length, 2, "切倍速要重起音源");
+  assertClose(started[1].offset, 1.0, 1e-9);
+  assert.equal(started[1].src.playbackRate.value, 0.5);
+  assertClose(e.songTime, 1.0, 1e-9);
+
+  // 之后真实 1 秒 = 歌曲 0.5 秒
+  clock.t = 2;
+  assertClose(e.songTime, 1.5, 1e-9);
+
+  // 非法倍速回落到 1
+  e.setRate(0);
+  assert.equal(e.rate, 1);
 });
 
 test("AudioEngine: pause/resume 冻结并从暂停点续播", async () => {

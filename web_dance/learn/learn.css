@@ -1,0 +1,223 @@
+/* learn.css — 学舞模式(模块 B)的样式:面板 #learn-root + 选曲抽屉里的入口按钮。 */
+
+/* 选曲抽屉底部的「学舞模式」:跟在金色「开始挑战」下面的次级按钮 */
+#song-pick-learn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 11px 0;
+  border: 1px solid rgba(120, 160, 255, 0.5);
+  border-radius: 9px;
+  color: var(--text, #e8edff);
+  background: linear-gradient(180deg, rgba(77, 124, 255, 0.26), rgba(57, 255, 207, 0.12));
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+#song-pick-learn:hover { filter: brightness(1.18); transform: translateY(-1px); }
+#song-pick-learn:active { transform: translateY(1px); }
+
+#learn-root {
+  position: fixed;
+  left: 16px;
+  top: 64px;
+  width: min(30vw, 420px);
+  max-height: 34vh;
+  overflow-y: auto;
+  z-index: 40;
+  font-size: 13px;
+}
+
+#learn-root.hidden { display: none; }
+
+.ln-panel {
+  padding: 12px 12px 10px;
+  border-radius: 14px;
+  background: var(--panel, rgba(13, 20, 40, 0.72));
+  border: 1px solid var(--panel-border, rgba(120, 160, 255, 0.25));
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+}
+
+.ln-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ln-title {
+  font-family: var(--font-display, sans-serif);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--accent3, #39ffcf);
+}
+
+.ln-song {
+  margin-top: 2px;
+  color: var(--muted, #93a2c8);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.ln-x {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 16px;
+  color: var(--muted, #93a2c8);
+  background: transparent;
+  border: 1px solid var(--panel-border, rgba(120, 160, 255, 0.25));
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ln-x:hover { color: var(--text, #e8edff); border-color: var(--accent, #ff3d81); }
+
+.ln-step { margin-bottom: 9px; }
+
+.ln-label {
+  margin-bottom: 5px;
+  color: var(--muted, #93a2c8);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.ln-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ln-chip {
+  padding: 5px 9px;
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--text, #e8edff);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.ln-chip:hover { transform: translateY(-1px); border-color: var(--accent2, #4d7cff); }
+
+.ln-chip.on {
+  background: linear-gradient(135deg, rgba(255, 61, 129, 0.28), rgba(77, 124, 255, 0.28));
+  border-color: var(--accent, #ff3d81);
+  box-shadow: 0 0 12px rgba(255, 61, 129, 0.35);
+}
+
+.ln-chip:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.ln-chip small {
+  margin-left: 4px;
+  color: var(--muted, #93a2c8);
+  font-size: 10px;
+}
+
+/* 部位色:手=金 腿=青 躯干=蓝,和判定档位配色同族 */
+.ln-chip[data-part="arms"].on { border-color: var(--gold, #ffd54a); box-shadow: 0 0 12px rgba(255, 213, 74, 0.35); }
+.ln-chip[data-part="legs"].on { border-color: var(--accent3, #39ffcf); box-shadow: 0 0 12px rgba(57, 255, 207, 0.35); }
+.ln-chip[data-part="torso"].on { border-color: var(--accent2, #4d7cff); box-shadow: 0 0 12px rgba(77, 124, 255, 0.35); }
+
+.ln-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.ln-actions button {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text, #e8edff);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+}
+
+.ln-actions button:hover:not(:disabled) { border-color: var(--accent2, #4d7cff); }
+
+.ln-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ln-actions .ln-primary {
+  flex-basis: 100%;
+  color: #0a1020;
+  background: linear-gradient(135deg, var(--accent3, #39ffcf), var(--accent2, #4d7cff));
+  border-color: transparent;
+}
+
+.ln-live { margin-top: 11px; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 9px; }
+.ln-live.hidden { display: none; }
+
+.ln-hud {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted, #93a2c8);
+}
+
+.ln-hud b { color: var(--gold, #ffd54a); font-size: 14px; }
+
+.ln-bars { margin-top: 8px; display: grid; gap: 5px; }
+
+.ln-bar {
+  display: grid;
+  grid-template-columns: 34px 1fr 38px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted, #93a2c8);
+}
+
+.ln-bar i {
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.ln-bar i b {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: var(--accent2, #4d7cff);
+  transition: width 0.2s ease;
+}
+
+.ln-bar[data-part="arms"] i b { background: var(--gold, #ffd54a); }
+.ln-bar[data-part="legs"] i b { background: var(--accent3, #39ffcf); }
+.ln-bar[data-part="torso"] i b { background: var(--accent2, #4d7cff); }
+
+.ln-bar.weak { color: var(--text, #e8edff); }
+
+.ln-fix {
+  margin-top: 8px;
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--text, #e8edff);
+}
+
+.ln-fix b { color: var(--accent, #ff3d81); }
+
+.ln-status {
+  margin-top: 8px;
+  min-height: 15px;
+  font-size: 11px;
+  color: var(--muted, #93a2c8);
+}
+
+@media (max-width: 900px) {
+  #learn-root { width: min(46vw, 380px); max-height: 40vh; }
+}

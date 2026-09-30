@@ -27,7 +27,7 @@ function fakeAudioContext(clock = { t: 0 }) {
     async close() {},
     async decodeAudioData() { return { duration: 0 }; },
     createBufferSource() {
-      const src = { buffer: null, connect() {}, start(when, offset) { started.push({ when, offset }); }, stop() {}, onended: null };
+      const src = { buffer: null, connect() {}, playbackRate: { value: 1 }, start(when, offset) { started.push({ when, offset }); }, stop() {}, onended: null };
       return src;
     },
   };

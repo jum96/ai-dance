@@ -40,18 +40,28 @@ function lastEntryWithT(arr, x) {
 // LatencyModel — 延迟建模 + 校准
 // ---------------------------------------------------------------------------
 export class LatencyModel {
-  constructor({ outputLatencySec = 0, inputLatencySec = 0, userOffsetSec = 0 } = {}) {
+  constructor({ outputLatencySec = 0, inputLatencySec = 0, userOffsetSec = 0, rate = 1 } = {}) {
     this.outputLatencySec = outputLatencySec;
     this.inputLatencySec = inputLatencySec;
     this.userOffsetSec = userOffsetSec;
+    this.rate = rate; // 播放倍速:真实秒 → 歌曲秒的换算系数
   }
 
   get totalOffsetSec() {
     return this.outputLatencySec + this.inputLatencySec + this.userOffsetSec;
   }
 
+  /**
+   * 真实秒换算成歌曲秒。三个延迟量的单位是**真实秒**(音频输出、摄像头管线、用户偏差),
+   * 而判定在歌曲时间轴上做;倍速下歌曲时间走得更快,补偿量必须同步缩放,
+   * 否则 0.5x 练舞时判定会整体偏移。
+   */
+  get songOffsetSec() {
+    return this.totalOffsetSec * this.rate;
+  }
+
   judgeTimeAt(songTime) {
-    return songTime + this.totalOffsetSec;
+    return songTime + this.songOffsetSec;
   }
 
   // 最小二乘:模型 actual = expected + bias,估计 bias = mean(actual - expected)
@@ -401,6 +411,7 @@ export class AudioEngine {
     this._startAt = null;
     this._offsetSec = 0;
     this._pausedAt = null;
+    this._rate = 1; // 播放倍速;见 songTime 与 setRate()
     this._durationSec = durationSec;
     this._state = "idle";
     this._loop = false;
@@ -435,11 +446,28 @@ export class AudioEngine {
   setDurationSec(sec) { this._durationSec = sec; }
 
   // 主时钟:ctx.currentTime - startAt + offsetSec,clamp 到 [0, durationSec]
+  // 倍速下歌曲时间比真实时间走得快,时间差要乘 _rate —— 全项目的时间轴都读这里,
+  // 改倍速只影响这一个公式(以及下方 _startSource 的 playbackRate)。
   get songTime() {
     if (this._startAt == null) return this._pausedAt ?? 0;
-    let t = this.ctx.currentTime - this._startAt + this._offsetSec;
+    let t = (this.ctx.currentTime - this._startAt) * this._rate + this._offsetSec;
     if (this._durationSec > 0) t = clamp(t, 0, this._durationSec);
     return t;
+  }
+
+  get rate() { return this._rate; }
+
+  /**
+   * 设置播放倍速。正在播放时就地重起音源,保证 songTime 连续(不跳)。
+   * 注意:AudioBufferSourceNode 变速**会变调**(不是变速不变调)。
+   */
+  setRate(rate) {
+    const next = rate > 0 && Number.isFinite(rate) ? rate : 1;
+    if (next === this._rate) return;
+    const wasSrc = this._src;
+    const at = wasSrc ? this.songTime : null;
+    this._rate = next;
+    if (wasSrc && at != null) this._startSource(this.ctx.currentTime, at);
   }
 
   get outputLatencySec() {
@@ -498,6 +526,7 @@ export class AudioEngine {
       src.connect(this.ctx.destination);
       for (const tap of this._recordingTaps) src.connect(tap);
       src.loop = this._loop;
+      src.playbackRate.value = this._rate;
       src.onended = () => { if (this._src === src) this._handleEnded(); };
       src.start(when, offsetSec + this._audioOffsetSec);
       this._src = src;
@@ -784,6 +813,12 @@ export class SongSession {
   }
 
   feed(songTime, frame) { this.judge?.feed(songTime, frame); }
+
+  /** 播放倍速:引擎时钟与会话延迟补偿必须同步改,漏一个判定就会整体偏移。 */
+  setRate(rate) {
+    this.latency.rate = rate > 0 && Number.isFinite(rate) ? rate : 1;
+    this.engine.setRate(rate);
+  }
 
   // 每 rAF 调用一次
   update() {

@@ -6,6 +6,7 @@
     <title>DANCE ARENA — 3D 舞蹈动捕</title>
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" href="./highlight.css" />
+    <link rel="stylesheet" href="./learn/learn.css" />
   </head>
   <body>
     <canvas id="stage"></canvas>
@@ -139,8 +140,12 @@
         <div id="song-pick-current">—</div>
         <label class="ready-consent"><input id="highlight-record-consent" type="checkbox" checked> 录制我的高光时刻</label>
         <button id="song-pick-start" type="button">开始挑战</button>
+        <button id="song-pick-learn" type="button">学舞模式 · 一组一组练</button>
       </section>
     </div>
+
+    <!-- 学舞模式(B):面板由 learn/learn.js 填内容,这里只给挂载点 -->
+    <div id="learn-root" class="hidden"></div>
 
     <!-- 右下:判定轨道(Just Dance 式:剪影从右往左流入判定平台,到达平台即消失)
          只有剪影 + 平台:无卡片外框、无进度条、无文字 --> 
