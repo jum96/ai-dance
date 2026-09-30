@@ -90,6 +90,7 @@ const dom = {
   cam: $("cam"),
   camStick: $("cam-stick"),
   camWrap: $("cam-wrap"),
+  camPanel: $("cam-panel"),
   refPanel: $("ref-panel"),
   refVideo: $("ref-video"),
   moveTrack: $("move-track"),
@@ -267,14 +268,28 @@ function showJudge(tier, subText) {
   dom.judge.classList.add("pop");
 }
 
-function judgeFeedback(tier, combo, scoreGain) {
+// 判定原因的可见化:只给"PERFECT/MISS"是不够的,玩家需要知道"错在哪"。
+// eventScorer 里 deltaT 的定义是 deltaT = 玩家最佳采样时刻 - 音符时刻,
+//   正数 = 晚了,负数 = 早了;deltaT 为 null = 整条采样窗里没有一帧合格(根本没跟上)。
+function missReason(res) {
+  const dt = res.deltaSec;
+  if (dt == null) return "没跟上动作";
+  const ms = Math.round(Math.abs(dt) * 1000);
+  if (ms >= 90) return dt > 0 ? `晚了 ${ms}ms` : `早了 ${ms}ms`;
+  return (res.acc ?? 0) < 0.55 ? "动作没到位" : "幅度不够";
+}
+
+function judgeFeedback(res) {
+  const { tier, combo, score } = res;
   const p = avatarScreen();
-  const gain = scoreGain > 0 ? "+" + Math.round(scoreGain) : "";
+  const gain = score > 0 ? "+" + Math.round(score) : "";
+  // GOOD/MISS 时把"为什么"顶到飘字位置 —— 这会儿玩家需要的是纠正,不是分数
+  const sub = tier === "GOOD" || tier === "MISS" ? missReason(res) : gain;
   if (tier !== lastTier) {
     lastTier = tier;
     flashCamFrame(tier);
     if (tier === "PERFECT") {
-      showJudge("PERFECT", gain);
+      showJudge("PERFECT", sub);
       juice.hitStop(70);            // 命中顿帧
       juice.punch(0.045);           // 镜头怼一下
       juice.shake(7);
@@ -283,7 +298,7 @@ function judgeFeedback(tier, combo, scoreGain) {
       juice.ring(p.x, p.y, { size: 92, color: "255,255,255", width: 2.5, duration: 220, delay: 40 });
       juice.sparks(p.x, p.y, { count: 28, rays: 14, speed: 420, colors: ["255,213,74", "255,255,255", "255,61,129"] });
     } else if (tier === "GREAT") {
-      showJudge("GREAT", gain);
+      showJudge("GREAT", sub);
       juice.hitStop(30);
       juice.punch(0.025);
       juice.shake(3);
@@ -291,12 +306,12 @@ function judgeFeedback(tier, combo, scoreGain) {
       juice.ring(p.x, p.y, { size: 120, color: "57,255,207", width: 3, duration: 280 });
       juice.sparks(p.x, p.y, { count: 14, rays: 8, speed: 300, colors: ["57,255,207", "255,255,255"] });
     } else if (tier === "GOOD") {
-      showJudge("GOOD", gain);
+      showJudge("GOOD", sub);
       juice.punch(0.015);
       juice.shake(2);
       juice.ring(p.x, p.y, { size: 92, color: "77,124,255", width: 2.5, duration: 230 });
     } else {
-      showJudge("MISS", "");
+      showJudge("MISS", sub);
       juice.hitStop(50);
       juice.punch(0.05);
       juice.shake(11);
@@ -1474,7 +1489,7 @@ async function startChallenge() {
           confidence: state.latestConf,
           noteId: result.noteId,
         });
-        lastTier = ""; judgeFeedback(result.tier, result.combo, result.score);
+        lastTier = ""; judgeFeedback(result);
       }
     }
     updateScoreHUD({ acc: ch.previewAcc ?? 0 });
@@ -1891,6 +1906,96 @@ async function applyLaunchParams() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 摄像头窗:可拖动 + 可缩放
+// 原来位置和宽度是 CSS 写死的(left:18px/bottom:18px/width:300px)。大屏摆摊时
+// 左下角经常压住舞台,而且固定 300px 在这个距离上要么太小要么太大,所以改成可调。
+// 位置与宽度存 localStorage,刷新后保留;双击标题栏恢复 CSS 默认。
+// ---------------------------------------------------------------------------
+const CAM_BOX_KEY = "dance-cam-box";
+const CAM_MIN_W = 160;
+
+function setupCamPanel() {
+  const panel = dom.camPanel;
+  const banner = panel?.querySelector(".cam-banner");
+  const grip = panel?.querySelector(".cam-resize");
+  if (!panel || !banner || !grip) return;
+
+  const put = (x, y, w) => {
+    panel.style.left = x + "px";
+    panel.style.top = y + "px";
+    panel.style.bottom = "auto";
+    panel.style.width = w + "px";
+    panel.style.transform = "none"; // 压掉 .pk-mode 的 translateY(-50%),否则位置会差半个高度
+  };
+
+  const restore = () => {
+    let box = null;
+    try { box = JSON.parse(localStorage.getItem(CAM_BOX_KEY) || "null"); } catch { /* 坏数据当没有 */ }
+    if (box && Number.isFinite(box.x) && Number.isFinite(box.y) && Number.isFinite(box.w)) put(box.x, box.y, box.w);
+    else panel.style.cssText = ""; // 回到 CSS 默认(左下角)
+  };
+
+  const save = () => {
+    const r = panel.getBoundingClientRect();
+    try {
+      localStorage.setItem(CAM_BOX_KEY, JSON.stringify({
+        x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width),
+      }));
+    } catch { /* 隐私模式:忽略 */ }
+  };
+
+  // 把当前渲染位置固化成内联 left/top,从 CSS 锚点接管,之后按 px 偏移即可
+  function beginDrag(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const r = panel.getBoundingClientRect();
+    const from = { x: r.left, y: r.top, w: r.width, px: e.clientX, py: e.clientY };
+    put(from.x, from.y, from.w);
+    const isResize = e.currentTarget === grip;
+    const onMove = (ev) => {
+      const dx = ev.clientX - from.px;
+      const dy = ev.clientY - from.py;
+      if (isResize) {
+        const maxW = Math.max(CAM_MIN_W, Math.min(900, window.innerWidth * 0.85));
+        panel.style.width = Math.min(maxW, Math.max(CAM_MIN_W, from.w + dx)) + "px";
+      } else {
+        const maxX = Math.max(0, window.innerWidth - panel.offsetWidth);
+        const maxY = Math.max(0, window.innerHeight - panel.offsetHeight);
+        panel.style.left = Math.min(maxX, Math.max(0, from.x + dx)) + "px";
+        panel.style.top = Math.min(maxY, Math.max(0, from.y + dy)) + "px";
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      save();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  banner.style.cursor = "move";
+  banner.title = "拖动可移动 · 双击复位";
+  banner.addEventListener("pointerdown", beginDrag);
+  grip.addEventListener("pointerdown", beginDrag);
+  banner.addEventListener("dblclick", () => {
+    try { localStorage.removeItem(CAM_BOX_KEY); } catch { /* noop */ }
+    restore();
+  });
+
+  restore();
+  // 分辨率/全屏变化后,已保存的位置可能落到屏幕外 → 重新夹回可视区
+  window.addEventListener("resize", () => {
+    if (!panel.style.left) return;
+    const maxX = Math.max(0, window.innerWidth - panel.offsetWidth);
+    const maxY = Math.max(0, window.innerHeight - panel.offsetHeight);
+    panel.style.left = Math.min(maxX, Math.max(0, parseFloat(panel.style.left))) + "px";
+    panel.style.top = Math.min(maxY, Math.max(0, parseFloat(panel.style.top))) + "px";
+    save();
+  });
+}
+
 // 启动:先导入歌单(songs/index.json),再组下拉、应用跳转参数
 async function init() {
   try {
@@ -1900,6 +2005,7 @@ async function init() {
     return;
   }
   setupChallengePickers();
+  setupCamPanel();
   ensureLaneManifest(); // 逐点 3D 白影清单:缺失/404 会自动退回 2D 剪影
   // 视频绑定表两种模式都要用:3D 模式下也要靠它判断「这支舞是不是视频作品」,
   // 否则 videoUrlFor() 恒为 null,选曲过滤会失效(曾经只有进视频模式才加载)。

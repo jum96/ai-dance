@@ -81,7 +81,7 @@ html, body {
   content: "";
   position: absolute;
   left: 50%; top: 50%;
-  width: 280px; height: 280px;
+  width: clamp(280px, 32vw, 620px); height: clamp(280px, 32vw, 620px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(circle, var(--jtier, #fff) 0%, transparent 62%);
@@ -95,7 +95,8 @@ html, body {
 }
 #judge-tier {
   font-family: var(--font-display);
-  font-size: 56px;
+  /* 电视/大屏摆摊要站远了看,字号跟着视口放大(写死 56px 在 1080p 上远看太小) */
+  font-size: clamp(56px, 6.5vw, 132px);
   font-weight: 900;
   font-style: italic;
   letter-spacing: 2px;
@@ -116,7 +117,7 @@ html, body {
 #judge-sub {
   margin-top: 5px;
   font-family: var(--font-display);
-  font-size: 21px;
+  font-size: clamp(21px, 2.4vw, 46px);
   font-weight: 800;
   letter-spacing: 1px;
   color: var(--jtier, #fff);
@@ -359,6 +360,7 @@ html, body {
   left: 18px; bottom: 18px;
   width: 300px;
   padding: 12px;
+  touch-action: none; /* 拖动/缩放走 pointer 事件,禁掉浏览器默认手势 */
   border-radius: 12px;
   background: linear-gradient(180deg, #0d0b08 0%, #070605 100%);
   border: 1px solid rgba(226, 196, 112, 0.65);
@@ -442,6 +444,8 @@ html, body {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
+  user-select: none;
+  touch-action: none;
   border-radius: 8px 8px 0 0;
   border: 1px solid rgba(226, 196, 112, 0.35);
   border-bottom: none;
@@ -502,6 +506,22 @@ html, body {
 .cam-corner.tr { top: 7px; right: 7px; border-left: none; border-bottom: none; }
 .cam-corner.bl { bottom: 7px; left: 7px; border-right: none; border-top: none; }
 .cam-corner.br { bottom: 7px; right: 7px; border-left: none; border-top: none; }
+/* 缩放把手:拖右下角改宽度(高度由 #cam-wrap 的 aspect-ratio 自动跟)。
+   与霓虹配色一致,不用金箔那套;.pk-mode 只隐藏 .cam-corner/.cam-seal,不会藏掉它。 */
+.cam-resize {
+  position: absolute;
+  right: 6px; bottom: 6px;
+  width: 22px; height: 22px;
+  cursor: nwse-resize;
+  z-index: 4;
+  border-right: 3px solid var(--accent3);
+  border-bottom: 3px solid var(--accent3);
+  border-radius: 0 0 4px 0;
+  opacity: 0.5;
+  transition: opacity 0.15s, box-shadow 0.15s;
+  touch-action: none;
+}
+.cam-resize:hover { opacity: 1; box-shadow: 4px 4px 18px rgba(57, 255, 207, 0.55); }
 /* 国庆印章(斜盖在视频角上) */
 .cam-seal {
   position: absolute; bottom: 12px; right: 12px; z-index: 5;
